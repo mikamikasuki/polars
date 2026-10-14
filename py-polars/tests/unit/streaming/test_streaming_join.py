@@ -59,6 +59,24 @@ def test_streaming_full_outer_joins() -> None:
         assert_frame_equal(a, b, check_row_order=False)
 
 
+def test_streaming_mixed_integer_full_join_unique_29903() -> None:
+    left = pl.LazyFrame({"k": pl.Series([2, 1], dtype=pl.Int32), "s": ["a", "b"]})
+    right = pl.LazyFrame({"k": pl.Series([1], dtype=pl.Int64), "x": ["c"], "y": ["d"]})
+
+    query = left.join(right, on="k", how="full", coalesce=True).unique()
+    expected = pl.DataFrame(
+        {
+            "k": pl.Series([2, 1], dtype=pl.Int64),
+            "s": ["a", "b"],
+            "x": [None, "c"],
+            "y": [None, "d"],
+        }
+    )
+
+    result = query.collect(engine="streaming")
+    assert_frame_equal(result, expected, check_row_order=False)
+
+
 def test_streaming_joins() -> None:
     n = 100
     dfa = pd.DataFrame(

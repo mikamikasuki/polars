@@ -402,8 +402,26 @@ pub fn resolve_join(
     }
 
     // These are Arc<Schema>, into_owned is free.
-    let schema_left = schema_left.into_owned();
-    let schema_right = schema_right.into_owned();
+    let mut schema_left = schema_left.into_owned();
+    let mut schema_right = schema_right.into_owned();
+
+    // For coalescing full joins, the key columns are cast on both inputs before the join.
+    // Keep the input schemas in sync with those casts so downstream operators (and the
+    // resulting join schema) see the dtype the physical join actually produces.
+    for expr in &as_with_columns_l {
+        let dtype = ctxt
+            .expr_arena
+            .get(expr.node())
+            .to_dtype(&ToFieldContext::new(ctxt.expr_arena, &schema_left))?;
+        Arc::make_mut(&mut schema_left).with_column(expr.output_name().clone(), dtype);
+    }
+    for expr in &as_with_columns_r {
+        let dtype = ctxt
+            .expr_arena
+            .get(expr.node())
+            .to_dtype(&ToFieldContext::new(ctxt.expr_arena, &schema_right))?;
+        Arc::make_mut(&mut schema_right).with_column(expr.output_name().clone(), dtype);
+    }
 
     options.options = {
         let on = left_on.into_iter().zip(right_on).collect();
